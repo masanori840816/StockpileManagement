@@ -17,6 +17,11 @@ export function RegisterPage(): JSX.Element {
             }
         };
         startWebcam();
+        return () => {
+            if (webcamStream) {
+                webcamStream.getTracks().forEach(track => track.stop());
+            }
+        };
     }, []);
     
     return (
