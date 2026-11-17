@@ -1,43 +1,73 @@
 import { useEffect, useRef, useState } from 'react';
 import type { JSX } from 'react/jsx-runtime';
 import { BrowserMultiFormatOneDReader, type IScannerControls } from '@zxing/browser';
-import { NotFoundException } from '@zxing/library';
+import { BarcodeFormat, DecodeHintType, NotFoundException } from '@zxing/library';
 
+const hints = new Map<DecodeHintType, unknown>([
+    [DecodeHintType.POSSIBLE_FORMATS, [
+        BarcodeFormat.EAN_13,
+        BarcodeFormat.EAN_8, 
+        BarcodeFormat.UPC_A, 
+        BarcodeFormat.UPC_E, 
+        BarcodeFormat.CODE_128, 
+        BarcodeFormat.CODE_39,
+        BarcodeFormat.ITF,
+    ]],
+]);
 export function RegisterPage(): JSX.Element {
     const videoRef = useRef<HTMLVideoElement>(null);
     const [barcodeValue, setBarcodeValue] = useState('');
     useEffect(() => {
+        const video = videoRef.current;
+        if(video == null) {
+            return;
+        }
+        let cancelled = false;
         let webcamStream: MediaStream | null = null;
-        const codeReader = new BrowserMultiFormatOneDReader();
-        let controls: IScannerControls | null = null;
+
+        const codeReader = new BrowserMultiFormatOneDReader(hints);
+        let scannerControls: IScannerControls | null = null;
+        let lastBarcodeValue: string | null = null;
         const startWebcam = async (): Promise<void> => {
             try {
-                webcamStream = await navigator.mediaDevices.getUserMedia({ video: true });
-                if (videoRef.current) {
-                    videoRef.current.srcObject = webcamStream;
-                    controls = await codeReader.decodeFromVideoDevice(
-                    undefined,
-                    videoRef.current,
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "environment", 
+                        width: { ideal: 1920 }, 
+                        height: { ideal: 1080 } } });
+                if (cancelled) {
+                    stream.getTracks().forEach(track => track.stop());
+                    return;
+                }
+                webcamStream = stream;
+                video.srcObject = webcamStream;
+                const controls = await codeReader.decodeFromVideoElement(
+                    video,
                     (result, error) => {
-                        if (result) {
+                        if (result && result.getText() !== lastBarcodeValue) {
                             setBarcodeValue(result.getText());
+                            lastBarcodeValue = result.getText();
                             console.log('Success:', result.getText());
                         }
                         if (error && !(error instanceof NotFoundException)) {
                             console.error('Error reading barcode:', error);
                         }
                     }
-                    );
+                );
+                if(cancelled) {
+                    controls.stop();
+                } else {
+                    scannerControls = controls;
                 }
             } catch (error) {
-                console.error('Error accessing webcam:', error);
+                if(!cancelled) {
+                    console.error('Error accessing webcam:', error);
+                }
             }
         };
         startWebcam();
         return () => {
-            if (controls) {
-                controls.stop();
-            }
+            cancelled = true;
+            scannerControls?.stop();
             if (webcamStream) {
                 webcamStream.getTracks().forEach(track => track.stop());
             }
