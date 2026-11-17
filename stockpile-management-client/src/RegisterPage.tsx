@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import type { JSX } from 'react/jsx-runtime';
-import { BrowserMultiFormatReader, NotFoundException, type IScannerControls } from '@zxing/browser';
+import { BrowserMultiFormatOneDReader, type IScannerControls } from '@zxing/browser';
+import { NotFoundException } from '@zxing/library';
 
 export function RegisterPage(): JSX.Element {
     const videoRef = useRef<HTMLVideoElement>(null);
     const [barcodeValue, setBarcodeValue] = useState('');
     useEffect(() => {
         let webcamStream: MediaStream | null = null;
-        const codeReader = new BrowserMultiFormatReader();
+        const codeReader = new BrowserMultiFormatOneDReader();
         let controls: IScannerControls | null = null;
         const startWebcam = async (): Promise<void> => {
             try {
