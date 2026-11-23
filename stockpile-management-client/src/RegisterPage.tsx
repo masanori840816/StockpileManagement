@@ -78,6 +78,10 @@ export function RegisterPage(): JSX.Element {
         <div>
             <h1>Register Page</h1>
             <div>
+                <div>製品名: <input type="text" /></div>
+                <div>製品番号: <input type="number" /></div>
+                <div>賞味期限: <input type="date" /></div>
+                <div>保存場所: <input type="text" /></div>
                 <div>Scanned Barcode: {barcodeValue}</div>
                 <video ref={videoRef} autoPlay muted></video>
             </div>
