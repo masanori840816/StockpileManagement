@@ -5,6 +5,7 @@ export interface Stockpile {
     expiryDate: string;
     location: string;
     quantity: number;
+    photo?: Blob;
     isSynced: boolean;
     updatedAt: string;
 }
