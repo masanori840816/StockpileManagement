@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import type { JSX } from 'react/jsx-runtime';
 import { BrowserMultiFormatOneDReader, type IScannerControls } from '@zxing/browser';
 import { BarcodeFormat, DecodeHintType, NotFoundException } from '@zxing/library';
+import type { Stockpile } from './stockpiles/stockpile';
+import { hasAnyTexts, isNumber } from './texts/hasAnyTexts';
+import { db } from './stockpiles/ds';
 
 const hints = new Map<DecodeHintType, unknown>([
     [DecodeHintType.POSSIBLE_FORMATS, [
@@ -16,7 +19,46 @@ const hints = new Map<DecodeHintType, unknown>([
 ]);
 export function RegisterPage(): JSX.Element {
     const videoRef = useRef<HTMLVideoElement>(null);
+    const lastBarcodeValue = useRef<string | null>(null);
     const [barcodeValue, setBarcodeValue] = useState('');
+    const [message, setMessage] = useState('');
+    const [saving, setSaving] = useState(false);
+    const handleSubmit = async (event: React.SubmitEvent<HTMLFormElement>): Promise<void> => {
+        event.preventDefault();
+        if(saving) {
+            return;
+        }
+        const form = event.currentTarget;
+        const data = new FormData(form);
+        const stockpile: Stockpile = {
+            id: crypto.randomUUID(),
+            name: String(data.get('productName')).trim(),
+            gtin: String(data.get('gtin')).trim(),
+            expiryDate: String(data.get('expiryDate')).trim(),
+            location: String(data.get('location')).trim(),
+            quantity: Number(data.get('quantity')),
+            isSynced: false,
+            updatedAt: new Date().toISOString(),
+        };
+        if(!hasAnyTexts(stockpile.gtin) || !hasAnyTexts(stockpile.expiryDate) || !isNumber(stockpile.quantity)) {
+            setMessage('製品番号、期限日、数量を入力してください。');
+            return;
+        }
+        setSaving(true);
+        setMessage('保存中...');
+        try {
+            await db.stockpiles.add(stockpile);
+            form.reset();
+            lastBarcodeValue.current = null;
+            setBarcodeValue('');
+            setMessage('保存しました。');
+        } catch (error) {
+            console.error('Error saving stockpile:', error);
+            setMessage('保存中にエラーが発生しました。');
+        }finally {
+            setSaving(false);
+        }
+    };
     useEffect(() => {
         const video = videoRef.current;
         if(video == null) {
@@ -27,7 +69,6 @@ export function RegisterPage(): JSX.Element {
 
         const codeReader = new BrowserMultiFormatOneDReader(hints);
         let scannerControls: IScannerControls | null = null;
-        let lastBarcodeValue: string | null = null;
         const startWebcam = async (): Promise<void> => {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -43,9 +84,9 @@ export function RegisterPage(): JSX.Element {
                 const controls = await codeReader.decodeFromVideoElement(
                     video,
                     (result, error) => {
-                        if (result && result.getText() !== lastBarcodeValue) {
+                        if (result && result.getText() !== lastBarcodeValue.current) {
                             setBarcodeValue(result.getText());
-                            lastBarcodeValue = result.getText();
+                            lastBarcodeValue.current = result.getText();
                             console.log('Success:', result.getText());
                         }
                         if (error && !(error instanceof NotFoundException)) {
@@ -77,14 +118,20 @@ export function RegisterPage(): JSX.Element {
     return (
         <div>
             <h1>Register Page</h1>
-            <div>
-                <div>製品名: <input type="text" /></div>
-                <div>製品番号: <input type="number" /></div>
-                <div>賞味期限: <input type="date" /></div>
-                <div>保存場所: <input type="text" /></div>
-                <div>Scanned Barcode: {barcodeValue}</div>
+            <form onSubmit={handleSubmit}>
+                <div><label>製品名: </label><input name="productName" type="text" /></div>
+                <div><label>製品番号: </label><input name="gtin" type="text" 
+                    value={barcodeValue} 
+                    onChange={(e) => setBarcodeValue(e.target.value)}
+                    required />
+                </div>
+                <div><label>使用期限: </label><input name="expiryDate" type="date" /></div>
+                <div><label>保存場所: </label><input name="location" type="text" /></div>
+                <div><label>数量: </label><input name="quantity" type="number" min="1" defaultValue={1} /></div>
                 <video ref={videoRef} autoPlay muted></video>
-            </div>
+                <div><button type="submit" disabled={saving}>登録</button></div>
+                {message && <div role="status">{message}</div>}
+            </form>
         </div>
     );
 }
